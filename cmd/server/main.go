@@ -3,8 +3,8 @@ package main
 import (
 	"fmt"
 	"log"
-	"os"
-	"os/signal"
+	// "os"
+	// "os/signal"
 
 	"github.com/bootdotdev/learn-pub-sub-starter/internal/pubsub"
 	"github.com/bootdotdev/learn-pub-sub-starter/internal/routing"
@@ -28,7 +28,7 @@ func main() {
 		log.Fatalf("error: %s\n", err.Error())
 	}
 
-	runGameLoop(ch)
+	serverGameLoop(ch)
 	
 	// signalChan := make(chan os.Signal, 1)
 	// signal.Notify(signalChan, os.Interrupt)
@@ -37,7 +37,7 @@ func main() {
 	fmt.Println("\nRabbitMQ connection closed.")
 }
 
-func runGameLoop(ch *amqp.Channel) {
+func serverGameLoop(ch *amqp.Channel) {
 	gamelogic.PrintServerHelp()
 	for {
 		input := gamelogic.GetInput()
