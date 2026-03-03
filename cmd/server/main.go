@@ -3,8 +3,6 @@ package main
 import (
 	"fmt"
 	"log"
-	// "os"
-	// "os/signal"
 
 	"github.com/bootdotdev/learn-pub-sub-starter/internal/pubsub"
 	"github.com/bootdotdev/learn-pub-sub-starter/internal/routing"
@@ -28,11 +26,19 @@ func main() {
 		log.Fatalf("error: %s\n", err.Error())
 	}
 
+	_, queue, err := pubsub.DeclareAndBind(
+					conn, 
+					routing.ExchangePerilTopic,
+					routing.GameLogSlug,
+					routing.GameLogSlug + ".*",
+					pubsub.Durable,
+				)
+	if err != nil {
+		log.Fatalf("could not subscribe to pause: %v", err)
+	}
+	fmt.Printf("Queue %v declared and bound !\n", queue.Name)
+
 	serverGameLoop(ch)
-	
-	// signalChan := make(chan os.Signal, 1)
-	// signal.Notify(signalChan, os.Interrupt)
-	// <-signalChan
 	
 	fmt.Println("\nRabbitMQ connection closed.")
 }
@@ -41,7 +47,7 @@ func serverGameLoop(ch *amqp.Channel) {
 	gamelogic.PrintServerHelp()
 	for {
 		input := gamelogic.GetInput()
-		if input == nil {
+		if len(input) == 0 {
 			continue
 		}
 

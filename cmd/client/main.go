@@ -3,8 +3,6 @@ package main
 import (
 	"fmt"
 	"log"
-	// "os"
-	// "os/signal"
 
 	"github.com/bootdotdev/learn-pub-sub-starter/internal/gamelogic"
 	"github.com/bootdotdev/learn-pub-sub-starter/internal/pubsub"
@@ -22,37 +20,68 @@ func main() {
 	defer conn.Close()
 	fmt.Println("Peril game client connected to RabbitMQ!.")
 
+	ch, err := conn.Channel()
+	if err != nil {
+		log.Fatalf("error: %s\n", err.Error())
+	}
+
 	username, err := gamelogic.ClientWelcome()
 	if err != nil {
 		log.Fatalf("error: %s\n", err.Error())
 	}
 
-	queueName := routing.PauseKey + "." + username
-	_, _, err = pubsub.DeclareAndBind(conn, 
+	gs := gamelogic.NewGameState(username)
+	pauseQueueName := routing.PauseKey + "." + username
+	err = pubsub.SubscribeJSON(conn, 
 								routing.ExchangePerilDirect, 
-								queueName, 
+								pauseQueueName, 
 								routing.PauseKey, 
 								pubsub.Transient,
+								HandlerPause(gs),
 							)
 	if err != nil {
 		log.Fatalf("error: %s\n", err.Error())
 	}
 
-	gs := gamelogic.NewGameState(username)
-	
-	clientGameLoop(gs)
 
-	// signalChan := make(chan os.Signal, 1)
-	// signal.Notify(signalChan, os.Interrupt)
-	// <-signalChan
+	armyMovesQueueName := routing.ArmyMovesPrefix + "." + username
+	err = pubsub.SubscribeJSON(conn,
+		routing.ExchangePerilTopic,
+		armyMovesQueueName,
+		routing.ArmyMovesPrefix + ".*",
+		pubsub.Transient,
+		HandlerMove(gs, ch),
+	)
+	if err != nil {
+		log.Fatalf("error: %s\n", err.Error())
+	}
+
+	warQueueName := routing.WarRecognitionsPrefix 
+	err = pubsub.SubscribeJSON(conn,
+		routing.ExchangePerilTopic,
+		warQueueName,
+		routing.WarRecognitionsPrefix + ".*",
+		pubsub.Durable,
+		HandlerWar(gs),
+	)
+	if err != nil {
+		log.Fatalf("error: %s\n", err.Error())
+	}
+
+
+	clientGameLoop(gs, ch, username)
 
 	fmt.Println("Client connection closed...")
 }
 
-func clientGameLoop(gs *gamelogic.GameState) {
+func clientGameLoop(gs *gamelogic.GameState, ch *amqp.Channel, username string) {
 	gamelogic.PrintClientHelp()
 	for {
 		input := gamelogic.GetInput()
+		if len(input) == 0 {
+			continue
+		}
+
 		switch input[0] {
 		case "spawn":
 			err := gs.CommandSpawn(input)
@@ -67,6 +96,12 @@ func clientGameLoop(gs *gamelogic.GameState) {
 				continue
 			}
 			log.Printf("Moved %v unit(s) to %v\n", len(mv.Units), mv.ToLocation)
+			
+			err = pubsub.PublishJSON(ch, routing.ExchangePerilTopic, routing.ArmyMovesPrefix + "." + username, mv)
+			if err != nil {
+				log.Printf("invalid: %v\n", err.Error())
+			}
+			log.Println("Move published successfully.")
 		case "status":
 			gs.CommandStatus()
 		case "help":
