@@ -62,7 +62,7 @@ func main() {
 		warQueueName,
 		routing.WarRecognitionsPrefix + ".*",
 		pubsub.Durable,
-		HandlerWar(gs),
+		HandlerWar(gs, ch),
 	)
 	if err != nil {
 		log.Fatalf("error: %s\n", err.Error())
